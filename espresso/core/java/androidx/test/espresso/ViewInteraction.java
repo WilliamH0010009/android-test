@@ -20,18 +20,23 @@ import static androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom;
 import static androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA;
 import static androidx.test.internal.util.LogUtil.logDebugWithProcess;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
+import android.graphics.Bitmap;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
+import androidx.test.annotation.ExperimentalScreenshot;
+import androidx.test.core.view.ViewCapture;
 import androidx.test.espresso.action.ScrollToAction;
 import androidx.test.espresso.base.InterruptableUiController;
 import androidx.test.espresso.base.MainThread;
 import androidx.test.espresso.internal.data.TestFlowVisualizer;
 import androidx.test.espresso.internal.data.model.ActionData;
 import androidx.test.espresso.matcher.RootMatchers;
+import androidx.test.espresso.matcher.ViewMatchers;
 import androidx.test.espresso.remote.Bindable;
 import androidx.test.espresso.remote.IInteractionExecutionStatus;
 import androidx.test.espresso.remote.RemoteInteraction;
@@ -42,13 +47,16 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableFutureTask;
 import com.google.common.util.concurrent.ListeningExecutorService;
+import com.google.common.util.concurrent.SettableFuture;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.inject.Inject;
@@ -331,6 +339,58 @@ public final class ViewInteraction {
 
     waitForAndHandleInteractionResults(interactions);
     return this;
+  }
+
+  /**
+   * Captures an image of the underlying view into a {@link Bitmap}.
+   *
+   * <p>Essentially makes {@link ViewCapture#captureViewToImage(View)} available for users using
+   * espresso API.
+   *
+   * <p>This API is currently experimental and subject to change or removal.
+   */
+  @ExperimentalScreenshot
+  public Bitmap captureToImage() {
+    SettableFuture<Bitmap> bitmapFuture = SettableFuture.create();
+
+    perform(new ImageCaptureViewAction(bitmapFuture));
+    try {
+      return bitmapFuture.get(10, SECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new CaptureImageException("failed to capture image", e);
+    }
+  }
+
+  private static class CaptureImageException extends RuntimeException implements EspressoException {
+    CaptureImageException(String message, Exception e) {
+      super(message, e);
+    }
+  }
+
+  private static class ImageCaptureViewAction implements ViewAction {
+
+    private final SettableFuture<Bitmap> bitmapFuture;
+
+    ImageCaptureViewAction(SettableFuture<Bitmap> bitmapFuture) {
+      this.bitmapFuture = bitmapFuture;
+    }
+
+    @Override
+    public Matcher<View> getConstraints() {
+      return ViewMatchers.isDisplayingAtLeast(90);
+    }
+
+    @Override
+    public String getDescription() {
+      return String.format(Locale.ROOT, "capture view to image");
+    }
+
+    @Override
+    public void perform(UiController uiController, View view) {
+      uiController.loopMainThreadUntilIdle();
+
+      bitmapFuture.setFuture(ViewCapture.captureViewToImage(view));
+    }
   }
 
   private ListenableFuture<Void> postAsynchronouslyOnUiThread(Callable<Void> interaction) {

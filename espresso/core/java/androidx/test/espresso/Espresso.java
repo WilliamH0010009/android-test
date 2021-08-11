@@ -37,6 +37,7 @@ import android.view.Choreographer;
 import android.view.View;
 import android.view.ViewConfiguration;
 import androidx.annotation.CheckResult;
+import androidx.test.annotation.ExperimentalScreenshot;
 import androidx.test.espresso.action.ViewActions;
 import androidx.test.espresso.base.IdlingResourceRegistry;
 import androidx.test.espresso.util.TreeIterables;
@@ -99,6 +100,17 @@ public final class Espresso {
   @CheckResult
   public static DataInteraction onData(Matcher<? extends Object> dataMatcher) {
     return new DataInteraction(dataMatcher);
+  }
+
+  /**
+   * Starts a {@link DeviceInteraction} fluent API call. This method is used to invoke operations
+   * that are device-centric in scope.
+   *
+   * <p>This API is experimental and subject to change or removal.
+   */
+  @ExperimentalScreenshot
+  public static DeviceInteraction onDevice() {
+    return new DeviceInteraction();
   }
 
   /**
